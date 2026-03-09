@@ -1,6 +1,4 @@
 import streamlit as st
-import pandas as pd
-import altair as alt
 
 st.set_page_config(page_title="WBC Pool C Tiebreaker", layout="wide")
 st.title("WBC 2026 Pool C — Who advances?")
@@ -64,57 +62,64 @@ def compute_tiebreaker(kor_runs: int, aus_runs: int):
 # ── Build the simulation data ────────────────────────────────────────────
 max_runs = 20
 
-records = []
+COLORS = {
+    "Korea": "#1a3a5c",
+    "Australia": "#1b5e20",
+    "Chinese Taipei": "#b71c1c",
+    "N/A": "#222",
+}
+
+grid = {}  # grid[(kor_r, aus_r)] = label
 for kor_r in range(1, max_runs + 1):
     for aus_r in range(0, max_runs):
         margin = kor_r - aus_r
         if margin < min_margin:
             if kor_r <= aus_r:
-                label = "Australia"
+                grid[(kor_r, aus_r)] = "Australia"
             else:
-                label = "N/A"
+                grid[(kor_r, aus_r)] = "N/A"
         else:
             winner, _ = compute_tiebreaker(kor_r, aus_r)
             if "KOR" in winner:
-                label = "Korea"
+                grid[(kor_r, aus_r)] = "Korea"
             elif "AUS" in winner:
-                label = "Australia"
+                grid[(kor_r, aus_r)] = "Australia"
             else:
-                label = "Chinese Taipei"
-        records.append({"Korea runs": kor_r, "Australia runs": aus_r, "Advances": label})
+                grid[(kor_r, aus_r)] = "Chinese Taipei"
 
-chart_df = pd.DataFrame(records)
-
-color_scale = alt.Scale(
-    domain=["Korea", "Australia", "Chinese Taipei", "N/A"],
-    range=["#1a3a5c", "#1b5e20", "#b71c1c", "#222222"],
-)
-
-chart = (
-    alt.Chart(chart_df)
-    .mark_rect()
-    .encode(
-        x=alt.X("Australia runs:O", title="🇦🇺 Australia runs", axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("Korea runs:O", title="🇰🇷 Korea runs", sort="descending"),
-        color=alt.Color("Advances:N", scale=color_scale, legend=alt.Legend(title="Who advances")),
-        tooltip=["Korea runs", "Australia runs", "Advances"],
-    )
-    .properties(width=700, height=600)
-)
-
-text = (
-    alt.Chart(chart_df[chart_df["Advances"] != "N/A"])
-    .mark_text(fontSize=9, color="white")
-    .encode(
-        x=alt.X("Australia runs:O"),
-        y=alt.Y("Korea runs:O", sort="descending"),
-        text=alt.Text("Advances:N"),
-    )
-)
-
+# ── Render as scrollable HTML table ─────────────────────────────────────
 st.subheader("Who gets the #2 seed?")
-st.markdown("Gray cells = impossible margin for this game length.")
-st.altair_chart(chart + text, use_container_width=True)
+st.markdown("**Rows** = Korea runs &nbsp;&nbsp;|&nbsp;&nbsp; **Columns** = Australia runs")
+
+aus_range = list(range(0, max_runs))
+kor_range = list(range(1, max_runs + 1))
+
+TH = "style='min-width:40px;text-align:center;padding:6px'"
+header = f"<th {TH}></th>"
+for a in aus_range:
+    header += f"<th {TH}>{a}</th>"
+
+rows_html = ""
+for k in kor_range:
+    cells = f"<td style='text-align:center;padding:6px;font-weight:bold'>{k}</td>"
+    for a in aus_range:
+        label = grid[(k, a)]
+        bg = COLORS[label]
+        txt = "" if label == "N/A" else label
+        color = "#555" if label == "N/A" else "white"
+        cells += f"<td style='background:{bg};color:{color};text-align:center;padding:4px 6px;font-size:12px;white-space:nowrap'>{txt}</td>"
+    rows_html += f"<tr>{cells}</tr>"
+
+html = f"""
+<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%">
+<table style="border-collapse:collapse;font-size:13px">
+<thead><tr>{header}</tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+</div>
+"""
+
+st.markdown(html, unsafe_allow_html=True)
 
 # ── Explanation panel ───────────────────────────────────────────────────
 with st.expander("Show the math"):
